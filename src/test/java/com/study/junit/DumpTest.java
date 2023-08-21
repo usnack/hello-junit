@@ -6,13 +6,8 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.annotation.Commit;
-import org.springframework.test.annotation.Rollback;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.springframework.test.context.event.annotation.AfterTestMethod;
-import org.springframework.test.context.transaction.TestTransaction;
-import org.springframework.transaction.annotation.Transactional;
 import org.testcontainers.containers.OracleContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -28,10 +23,22 @@ import static org.assertj.core.api.Assertions.assertThat;
 @SpringBootTest
 @Testcontainers
 class DumpTest {
+    static class Constants {
+        static final String VERSION = "230821-2";
+        static final List<Member> MEMBERS = List.of(
+                new Member(1L, "first"),
+                new Member(2L, "second"),
+                new Member(3L, "third"),
+                new Member(4L, "fourth"),
+                new Member(5L, "fifth")
+        );
+        static final int MEMBER_SIZE = MEMBERS.size();
+    }
+
     @Container
     static OracleContainer oracle = new OracleContainer(
-//            DockerImageName.parse("container-registry.oracle.com/database/express:18.4.0-xe")
             DockerImageName.parse("oracle/database:18.4.0-xe-snapshot")
+//            DockerImageName.parse("container-registry.oracle.com/database/express:18.4.0-xe")
                     .asCompatibleSubstituteFor("gvenzl/oracle-xe")
 //            DockerImageName.parse("gvenzl/oracle-xe:18.4.0-slim-faststart")
     )
@@ -60,45 +67,34 @@ class DumpTest {
         }
     }
     //
-
-    @Transactional
-    @Rollback(value = false)
     @Test
     void exportTest() throws InterruptedException, IOException {
-        memberRepository.saveAll(
-                List.of(
-                        new Member(1L, "first"),
-                        new Member(2L, "second"),
-                        new Member(3L, "third"),
-                        new Member(4L, "fourth"),
-                        new Member(5L, "fifth")
+        memberRepository.saveAll(Constants.MEMBERS);
+
+        org.testcontainers.containers.Container.ExecResult execResult = oracle.execInContainer(
+                "sh",
+                "-c",
+                String.format("expdp C##DUMPER/1234@XE tables=member directory=dump_vol dumpfile=%s.dmp logfile=%s.log",
+                        Constants.VERSION, Constants.VERSION
                 )
         );
-
-        TestTransaction.flagForCommit();
-        TestTransaction.end();
-
-        org.testcontainers.containers.Container.ExecResult execResult = oracle.execInContainer(
-                "sh",
-                "-c",
-                "expdp C##DUMPER/1234@XE tables=member directory=dump_vol dumpfile=230821_1.dmp logfile=230821_1.log"
-        );
         System.out.println(execResult);
+        assertThat(execResult.getExitCode())
+                .isZero();
     }
 
-
-    private void importDump() throws IOException, InterruptedException {
-        org.testcontainers.containers.Container.ExecResult execResult = oracle.execInContainer(
-                "sh",
-                "-c",
-                "impdp C##DUMPER/1234@XE tables=member directory=dump_vol content=data_only dumpfile=230821_1.dmp logfile=230821_1.log"
-        );
-        System.out.println(execResult);
-    }
-    //
     @Test
     void importTest() throws IOException, InterruptedException {
-        importDump();
+        org.testcontainers.containers.Container.ExecResult execResult = oracle.execInContainer(
+                "sh",
+                "-c",
+                String.format("impdp C##DUMPER/1234@XE tables=member directory=dump_vol content=data_only dumpfile=%s.dmp logfile=%s.log",
+                        Constants.VERSION, Constants.VERSION
+                )
+        );
+        System.out.println(execResult);
+        assertThat(execResult.getExitCode())
+                .isZero();
         //
         List<Member> members = memberRepository.findAll();
         System.out.println("Member size : " + members.size());
@@ -106,7 +102,7 @@ class DumpTest {
             System.out.println(member);
         }
 
-        assertThat(members.size())
-                .isEqualTo(5);
+        assertThat(members)
+                .hasSize(Constants.MEMBER_SIZE);
     }
 }
