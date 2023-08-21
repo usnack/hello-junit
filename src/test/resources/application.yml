@@ -1,0 +1,7 @@
+spring:
+  datasource:
+    driver-class-name: oracle.jdbc.OracleDriver
+    url: jdbc:oracle:thin:@localhost:51521/XE
+#    url: jdbc:oracle:thin:@localhost:61521/XE
+    username: C##DUMPER
+    password: 1234
