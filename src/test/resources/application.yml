@@ -5,3 +5,5 @@ spring:
 #    url: jdbc:oracle:thin:@localhost:61521/XE
     username: C##DUMPER
     password: 1234
+  jpa:
+    generate-ddl: true
