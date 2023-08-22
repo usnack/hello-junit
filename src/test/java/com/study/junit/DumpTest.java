@@ -24,7 +24,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 @Testcontainers
 class DumpTest {
     static class Constants {
-        static final String VERSION = "230821-2";
+        static final String VERSION = "230821-1";
         static final List<Member> MEMBERS = List.of(
                 new Member(1L, "first"),
                 new Member(2L, "second"),
@@ -36,19 +36,12 @@ class DumpTest {
     }
 
     @Container
-    static OracleContainer oracle = new OracleContainer(
-            DockerImageName.parse("oracle/database:18.4.0-xe-snapshot")
-//            DockerImageName.parse("container-registry.oracle.com/database/express:18.4.0-xe")
-                    .asCompatibleSubstituteFor("gvenzl/oracle-xe")
-//            DockerImageName.parse("gvenzl/oracle-xe:18.4.0-slim-faststart")
-    )
-            .withExposedPorts(1521, 5500)
-            .withEnv("ORACLE_PASSWORD", "1234")
-            .withEnv("ORACLE_PWD", "1234")
-            .withEnv("ORACLE_CHARACTERSET", "AL32UTF8")
-            .withFileSystemBind(Path.of("src", "test", "resources", "oracle", "startup", "01_config.sql").toAbsolutePath().toString(), "/opt/oracle/scripts/startup/01_config.sql")
-            .withFileSystemBind(Path.of("src", "test", "resources", "oracle", "dump").toAbsolutePath().toString().concat(File.separator), "/opt/oracle/dump/")
-            ;
+    static OracleContainer oracle =
+            new OracleContainer(DockerImageName.parse("gvenzl/oracle-xe:18.4.0-slim-faststart"))
+                    .withExposedPorts(1521, 5500)
+                    .withEnv("ORACLE_PASSWORD", "1234")
+                    .withFileSystemBind(Path.of("src", "test", "resources", "oracle", "startup").toAbsolutePath().toString().concat(File.separator), "/container-entrypoint-initdb.d/")
+                    .withFileSystemBind(Path.of("src", "test", "resources", "oracle", "dump").toAbsolutePath().toString().concat(File.separator), "/opt/oracle/dump/");
     @DynamicPropertySource
     static void postgresqlProperties(DynamicPropertyRegistry registry) {
         registry.add("spring.datasource.url", () -> String.format("jdbc:oracle:thin:@localhost:%s/XE", oracle.getMappedPort(1521)));
@@ -61,7 +54,7 @@ class DumpTest {
     //
     @BeforeAll
     static void waitForHealthy() throws InterruptedException {
-        while(!oracle.isHealthy()) {
+        while(!oracle.isRunning()) {
             System.out.println("oracle container is not healthy...");
             Thread.sleep(1000*5);
         }
